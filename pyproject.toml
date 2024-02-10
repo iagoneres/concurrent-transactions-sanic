@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "rinha-2024-fastapi"
+version = "0.1.0"
+description = ""
+authors = ["Iago Neres"]
+readme = "README.md"
+
+[tool.isort]
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+known_local_folder = "src"
+sections = "FUTURE,STDLIB,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
+default_section = "THIRDPARTY"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+
+[tool.poetry.dependencies]
+python = "^3.11"
+sanic = "^23.12.1"
+orjson = "^3.9.13"
+asyncpg = "^0.29.0"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^3.6.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
