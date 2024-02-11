@@ -2,7 +2,7 @@ import asyncpg
 import orjson
 from sanic import Sanic, response
 
-app = Sanic(__name__)
+app = Sanic("concurent_transactions")
 
 DB_NAME = "rinha_2024"
 DB_USER = "postgres"
@@ -20,6 +20,11 @@ async def create_pool():
 @app.listener("before_server_start")
 async def setup_db(app, loop):
     app.ctx.db_pool = await create_pool()
+
+
+@app.route("/", methods=["GET"])
+async def index(request):
+    return response.text("Welcome to Concurent Transactions API")
 
 
 @app.route("/clients", methods=["GET"])
@@ -108,4 +113,4 @@ async def get_statement(request, id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=8000)
