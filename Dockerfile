@@ -6,9 +6,8 @@ COPY ./src /app/
 COPY poetry.lock pyproject.toml /app/
 
 RUN pip install --no-cache-dir poetry && \
-    poetry config virtualenvs.create false
-
-RUN poetry install --only main --no-interaction --no-ansi && \
+    poetry config virtualenvs.create false && \
+    poetry install --only main --no-interaction --no-ansi && \
     rm -rf /root/.cache/pip
 
 RUN useradd sanic --no-user-group --no-create-home --uid 1000 && \

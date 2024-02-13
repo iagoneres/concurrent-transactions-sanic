@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  api:
+  api01: &api
     build: .
     depends_on:
       db:
@@ -9,11 +9,28 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 512M
-    command: "sanic server"
-    network_mode: "host"
+          cpus: '0.2'
+          memory: 120M
+    command: "sanic server --host=0.0.0.0 --port=8000 --single-process"
     restart: unless-stopped
+
+  api02:
+    <<: *api
+
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api01
+      - api02
+    ports:
+      - "9999:9999"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "60MB"
 
   db:
     container_name: db
@@ -39,5 +56,4 @@ services:
       interval: 2s
       timeout: 2s
       retries: 30
-    network_mode: host
     restart: unless-stopped

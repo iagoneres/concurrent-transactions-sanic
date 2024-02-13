@@ -7,7 +7,7 @@ app = Sanic("concurent_transactions")
 DB_NAME = "rinha_2024"
 DB_USER = "postgres"
 DB_PASSWORD = "postgres"
-DB_HOST = "localhost"
+DB_HOST = "db"
 DB_PORT = "5432"
 
 
@@ -40,45 +40,40 @@ async def get_clients(request):
 @app.route("/clients/<id:int>/transacoes", methods=["POST"])
 async def create_transaction(request, id):
     data = request.json
-    if data["tipo"] in ("c", "d"):
-        async with app.ctx.db_pool.acquire() as connection:
-            async with connection.transaction():
-                query = 'SELECT balance, "limit" FROM clients WHERE id = $1 FOR UPDATE'
-                client = await connection.fetchrow(query, id)
-
-                if not client:
-                    body = {"error": "Client not found"}
-                    return response.raw(
-                        orjson.dumps(body), status=404, content_type="application/json"
-                    )
-                balance, limit = client["balance"], client["limit"]
-
-                if data["tipo"] == "c":
-                    new_balance = balance + data["valor"]
-
-                if data["tipo"] == "d":
-                    if balance - data["valor"] < -limit:
-                        body = {"error": "Insufficient funds"}
-                        return response.raw(
-                            orjson.dumps(body),
-                            status=422,
-                            content_type="application/json",
-                        )
-                    else:
-                        new_balance = balance - data["valor"]
-
-                query = 'INSERT INTO transactions (client_id, "value", "type", description) VALUES ($1, $2, $3, $4)'
-                await connection.execute(query, id, data["valor"], data["tipo"], data["descricao"])
-
-                query = "UPDATE clients SET balance = $1 WHERE id = $2"
-                await connection.execute(query, new_balance, id)
-
-                body = {"limite": limit, "saldo": new_balance}
-                return response.raw(orjson.dumps(body), content_type="application/json")
-
-    else:
+    if data["tipo"] not in ("c", "d"):
         body = orjson.dumps({"error": "Invalid transaction type"})
         return response.raw(body, status=422, content_type="application/json")
+
+    async with app.ctx.db_pool.acquire() as connection:
+        async with connection.transaction():
+            query = 'SELECT balance, "limit" FROM clients WHERE id = $1 FOR UPDATE'
+            client = await connection.fetchrow(query, id)
+
+            if not client:
+                body = {"error": "Client not found"}
+                return response.raw(orjson.dumps(body), status=404, content_type="application/json")
+
+            balance, limit = client["balance"], client["limit"]
+            if data["tipo"] == "c":
+                new_balance = balance + data["valor"]
+            else:
+                if balance - data["valor"] < -limit:
+                    body = {"error": "Insufficient funds"}
+                    return response.raw(
+                        orjson.dumps(body),
+                        status=422,
+                        content_type="application/json",
+                    )
+                new_balance = balance - data["valor"]
+
+            query = 'INSERT INTO transactions (client_id, "value", "type", description) VALUES ($1, $2, $3, $4)'
+            await connection.execute(query, id, data["valor"], data["tipo"], data["descricao"])
+
+            query = "UPDATE clients SET balance = $1 WHERE id = $2"
+            await connection.execute(query, new_balance, id)
+
+            body = {"limite": limit, "saldo": new_balance}
+            return response.raw(orjson.dumps(body), content_type="application/json")
 
 
 @app.route("/clients/<id:int>/extrato", methods=["GET"])
@@ -93,7 +88,6 @@ async def get_statement(request, id):
         query = 'SELECT "value", "type", description, performed_at FROM transactions WHERE client_id = $1 ORDER BY performed_at DESC LIMIT 5'
         transactions = await connection.fetch(query, id)
 
-        # serializer transactions from valuem, type, description, performed_at to a list of dict of valor, tipo, descricao, realizada_em
         transactions = [
             {
                 "valor": record["value"],
