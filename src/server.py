@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import asyncpg
 import orjson
 from sanic import Sanic, response
@@ -27,7 +29,7 @@ async def index(request):
     return response.text("Welcome to Concurent Transactions API")
 
 
-@app.route("/clients", methods=["GET"])
+@app.route("/clientes", methods=["GET"])
 async def get_clients(request):
     async with app.ctx.db_pool.acquire() as connection:
         query = "SELECT * FROM clients ORDER BY id"
@@ -37,12 +39,45 @@ async def get_clients(request):
         return response.raw(orjson.dumps({"results": clients}), content_type="application/json")
 
 
-@app.route("/clients/<id:int>/transacoes", methods=["POST"])
+def validate_field(field, validation_func, error_message):
+    if not validation_func(field):
+        body = orjson.dumps({"error": error_message})
+        return response.raw(body, status=422, content_type="application/json")
+
+
+@app.route("/clientes/<id:int>/transacoes", methods=["POST"])
 async def create_transaction(request, id):
     data = request.json
-    if data["tipo"] not in ("c", "d"):
-        body = orjson.dumps({"error": "Invalid transaction type"})
-        return response.raw(body, status=422, content_type="application/json")
+
+    validations = [
+        {
+            "field": id,
+            "func": lambda x: isinstance(x, int),
+            "error": "Invalid ID. Must be an integer.",
+        },
+        {
+            "field": data.get("tipo", ""),
+            "func": lambda x: x in ("c", "d"),
+            "error": "Invalid transaction type. Must be 'c' or 'd'.",
+        },
+        {
+            "field": data.get("valor", ""),
+            "func": lambda x: isinstance(x, int),
+            "error": "Invalid value. Must be an integer.",
+        },
+        {
+            "field": data.get("descricao", ""),
+            "func": lambda x: isinstance(x, str) and 1 <= len(x) <= 10,
+            "error": "Invalid description. Must be a string between 1 and 10 characters.",
+        },
+    ]
+
+    for validation in validations:
+        error_response = validate_field(
+            validation["field"], validation["func"], validation["error"]
+        )
+        if error_response:
+            return error_response
 
     async with app.ctx.db_pool.acquire() as connection:
         async with connection.transaction():
@@ -76,7 +111,7 @@ async def create_transaction(request, id):
             return response.raw(orjson.dumps(body), content_type="application/json")
 
 
-@app.route("/clients/<id:int>/extrato", methods=["GET"])
+@app.route("/clientes/<id:int>/extrato", methods=["GET"])
 async def get_statement(request, id):
     async with app.ctx.db_pool.acquire() as connection:
         query = 'SELECT balance, "limit" FROM clients WHERE id = $1'
@@ -99,8 +134,11 @@ async def get_statement(request, id):
         ]
 
         body = {
-            "saldo": client["balance"],
-            "limite": client["limit"],
+            "saldo": {
+                "total": client["balance"],
+                "data_extrato": datetime.now(timezone.utc),
+                "limite": client["limit"],
+            },
             "ultimas_transacoes": transactions,
         }
         return response.raw(orjson.dumps(body), content_type="application/json")
