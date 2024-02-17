@@ -10,6 +10,8 @@ __pycache__/
 .vscode/
 .Python
 build/
+prometheus/*
+grafana/*
 develop-eggs/
 dist/
 downloads/
